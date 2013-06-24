@@ -1,0 +1,173 @@
+<?xml version="1.0"?>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+
+<?xml-stylesheet href="chrome://global/skin/"
+                 type="text/css"?>
+<?xml-stylesheet href="chrome://idbbrowser/skin/browser.css"
+                 type="text/css"?>
+
+<!DOCTYPE window SYSTEM "chrome://idbbrowser/locale/browser.dtd">
+
+<window title="&window.title;"
+        windowtype="IDBBrowser:Browser"
+        xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+        onload="BrowserController.load();"
+        screenX="10"
+        screenY="10"
+        persist="screenX screenY width height sizemode">
+
+  <script type="text/javascript;version=1.7"
+          src="chrome://idbbrowser/content/browser.js"/>
+
+  <commandset>
+    <command id="command-open"
+             oncommand="BrowserController.openDatabase();"/>
+    <command id="command-newWindow"
+             oncommand="BrowserController.newWindow();"/>
+    <command id="command-exit"
+             oncommand="BrowserController.exit();"/>
+  </commandset>
+
+  <keyset>
+    <key id="key-open"
+         key="&command-open.shortcutkey;"
+         modifiers="&command-open.modifiers;"
+         command="command-open"/>
+    <key id="key-newWindow"
+         key="&command-newWindow.shortcutkey;"
+         modifiers="&command-newWindow.modifiers;"
+         command="command-newWindow"/>
+    <key id="key-exit"
+         key="&command-exit.shortcutkey;"
+         modifiers="&command-exit.modifiers;"
+         command="command-exit"/>
+  </keyset>
+
+  <stringbundleset>
+    <stringbundle id="stringbundle"
+                  src="chrome://idbbrowser/locale/browser.properties"/>
+  </stringbundleset>
+
+  <menubar>
+    <menu label="&menu-file.label;"
+          accesskey="&menu-file.accesskey;">
+      <menupopup>
+        <menuitem label="&command-newWindow.label;"
+                  accesskey="&command-newWindow.accesskey;"
+                  command="command-newWindow"
+                  key="key-newWindow"/>
+        <menuitem label="&command-open.label;"
+                  accesskey="&command-open.accesskey;"
+                  command="command-open"
+                  key="key-open"/>
+        <menuseparator/>
+        <menuitem label="&command-exit.label;"
+                  accesskey="&command-exit.accesskey;"
+                  command="command-exit"
+                  key="key-exit"/>
+        </menupopup>
+    </menu>
+  </menubar>
+
+  <box id="box-main">
+    <box id="box-nav">
+      <tree id="tree-nav"
+            hidecolumnpicker="true"
+            seltype="single"
+            persist="width height"
+            onselect="BrowserController.handleNavSelect(event);">
+        <treecols>
+          <treecol primary="true"
+                   hideheader="true"/>
+        </treecols>
+        <treechildren id="treechildren-nav">
+          <treeitem container="true"
+                    open="true">
+            <treerow>
+              <treecell label="&treecell-profile.label;"
+                        properties="folder"/>
+            </treerow>
+            <treechildren id="treechildren-profile">
+              <treeitem>
+                <treerow>
+                  <treecell id="treecell-status"
+                            label="&treecell-searching.label;"
+                            properties="status"/>
+                </treerow>
+              </treeitem>
+            </treechildren>
+          </treeitem>
+        </treechildren>
+      </tree>
+      <splitter collapse="after" perist="state">
+        <grippy/>
+      </splitter>
+      <listbox id="listbox-metadata"
+               disabled="true"
+               persist="width height">
+        <listcols>
+          <listcol/>
+          <listcol class="value-column"/>
+        </listcols>
+        <listhead>
+          <listheader label="&listheader-metadata-key.label;"/>
+          <listheader label="&listheader-metadata-value.label;"/>
+        </listhead>
+      </listbox>
+      <button id="button-load"
+              label="&button-load.label;"
+              disabled="true"
+              onclick="BrowserController.handleLoadClick(event)"/>
+    </box>
+    <splitter/>
+    <box id="box-data">
+      <tree id="tree-data"
+            seltype="single"
+            enableColumnDrag="true"
+            disabled="true"
+            persist="width height">
+        <treecols>
+          <treecol id="treecol-key"
+                   anonid="0"
+                   label="&treecol-data-key.label;"
+                   ordinal="0"
+                   primary="true"
+                   persist="width ordinal hidden"/>
+          <splitter class="tree-splitter"
+                    resizeafter="grow"/>
+          <treecol id="treecol-primaryKey"
+                   anonid="1"
+                   label="&treecol-data-primaryKey.label;"
+                   ordinal="1"
+                   hidden="true"
+                   persist="width ordinal hidden"/>
+          <splitter class="tree-splitter"
+                    resizeafter="grow"/>
+          <treecol id="treecol-value"
+                   anonid="2"
+                   label="&treecol-data-value.label;"
+                   ordinal="2"
+                   persist="width ordinal hidden"
+                   class="value-column"/>
+          <splitter class="tree-splitter"
+                    resizeafter="grow"/>
+        </treecols>
+        <treechildren/>
+      </tree>
+      <splitter collapse="after" persist="state">
+        <grippy/>
+      </splitter>
+      <box id="box-data-description">
+        <description id="description-data"
+                     value="&description-data.value;"
+                     crop="start"
+                     disabled="true"/>
+        <description id="description-rowCount"
+                     crop="end"
+                     disabled="true"/>
+      </box>
+    </box>
+  </box>
+</window>

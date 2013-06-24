@@ -1,0 +1,36 @@
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+
+<!ENTITY window.title "IndexedDB Browser">
+
+<!ENTITY menu-file.label "File">
+<!ENTITY menu-file.accesskey "f">
+
+<!ENTITY command-open.label "Open External Database...">
+<!ENTITY command-open.accesskey "o">
+<!ENTITY command-open.shortcutkey "o">
+<!ENTITY command-open.modifiers "accel">
+
+<!ENTITY command-newWindow.label "New Window">
+<!ENTITY command-newWindow.accesskey "n">
+<!ENTITY command-newWindow.shortcutkey "n">
+<!ENTITY command-newWindow.modifiers "accel">
+
+<!ENTITY command-exit.label "Exit">
+<!ENTITY command-exit.accesskey "x">
+<!ENTITY command-exit.shortcutkey "w">
+<!ENTITY command-exit.modifiers "accel">
+
+<!ENTITY treecell-profile.label "Current Profile">
+<!ENTITY treecell-searching.label "Searching...">
+
+<!ENTITY listheader-metadata-key.label "Key">
+<!ENTITY listheader-metadata-value.label "Value">
+<!ENTITY button-load.label "Load Data >>">
+
+<!ENTITY treecol-data-key.label "Key">
+<!ENTITY treecol-data-primaryKey.label "Primary Key">
+<!ENTITY treecol-data-value.label "Value">
+
+<!ENTITY description-data.value "No data loaded">

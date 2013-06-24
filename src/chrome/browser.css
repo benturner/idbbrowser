@@ -1,0 +1,90 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+window {
+  width: 800px;
+  height: 600px;
+}
+
+listcol {
+  -moz-box-flex: 1;
+}
+
+listcol.value-column {
+  -moz-box-flex: 3
+}
+
+#tree-nav treecol {
+  -moz-box-flex: 1;
+}
+
+#box-main {
+  -moz-box-flex: 1;
+  -moz-box-orient: horizontal;
+}
+
+#box-nav {
+  -moz-box-flex: 1;
+  -moz-box-orient: vertical;
+  min-width: 100px;
+}
+
+#box-nav splitter {
+  margin-top: 5px;
+  margin-bottom: 5px;
+}
+
+#box-data {
+  -moz-box-flex: 10;
+  -moz-box-orient: vertical;
+}
+
+#tree-nav {
+  -moz-box-flex: 100;
+  min-width: 100px;
+}
+
+#listbox-metadata {
+  -moz-box-flex: 1;
+}
+
+#tree-nav treechildren::-moz-tree-cell-text(status),
+#tree-nav treechildren::-moz-tree-cell-text(database, unloaded) {
+  color: GrayText;
+  font-style: italic;
+}
+
+#tree-nav treechildren::-moz-tree-cell-text(displayed) {
+  font-weight: bold;
+}
+
+#tree-data {
+  -moz-box-flex: 5;
+}
+
+#box-data-description {
+  -moz-box-orient: horizontal;
+}
+
+#description-data {
+  -moz-box-flex: 1;
+  text-align: left;
+}
+
+#description-rowCount {
+  text-align: right;
+}
+
+#tree-nav treechildren::-moz-tree-image(folder) {
+/**
+ * For linux:
+ *   list-style-image: url(moz-icon://stock/gtk-directory?size=menu);
+ */
+  list-style-image: url(chrome://global/skin/dirListing/folder.png);
+}
+
+#tree-data treechildren::-moz-tree-cell-text(loading) {
+  color: GrayText;
+  font-style: italic;
+}
