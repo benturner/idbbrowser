@@ -10,7 +10,8 @@
 
 <!DOCTYPE window SYSTEM "chrome://idbbrowser/locale/browser.dtd">
 
-<window title="&window.title;"
+<window id="window-browser"
+        title="&window.title;"
         windowtype="IDBBrowser:Browser"
         xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
         onload="BrowserController.load();"
@@ -101,7 +102,9 @@
           </treeitem>
         </treechildren>
       </tree>
-      <splitter collapse="after" perist="state">
+      <splitter id="splitter-nav"
+                collapse="after"
+                perist="state">
         <grippy/>
       </splitter>
       <listbox id="listbox-metadata"
@@ -121,7 +124,11 @@
               disabled="true"
               onclick="BrowserController.handleLoadClick(event)"/>
     </box>
-    <splitter/>
+    <splitter id="splitter-main"
+              collapse="before"
+              perist="state">
+      <grippy/>
+    </splitter>
     <box id="box-data">
       <tree id="tree-data"
             seltype="single"
@@ -156,7 +163,9 @@
         </treecols>
         <treechildren/>
       </tree>
-      <splitter collapse="after" persist="state">
+      <splitter id="splitter-data"
+                collapse="after"
+                persist="state">
         <grippy/>
       </splitter>
       <box id="box-data-description">

@@ -7,20 +7,6 @@ window {
   height: 600px;
 }
 
-listcol,
-treecol {
-  -moz-box-flex: 1;
-}
-
-listcol.value-column,
-treecol.value-column {
-  -moz-box-flex: 3
-}
-
-#tree-nav treecol {
-  -moz-box-flex: 1;
-}
-
 #box-main {
   -moz-box-flex: 1;
   -moz-box-orient: horizontal;
@@ -37,6 +23,10 @@ treecol.value-column {
   margin-bottom: 5px;
 }
 
+#tree-nav treecol {
+  -moz-box-flex: 1;
+}
+
 #box-data {
   -moz-box-flex: 10;
   -moz-box-orient: vertical;
@@ -49,6 +39,14 @@ treecol.value-column {
 
 #listbox-metadata {
   -moz-box-flex: 1;
+}
+
+#listbox-metadata listcol {
+  -moz-box-flex: 1;
+}
+
+#listbox-metadata listcol.value-column {
+  -moz-box-flex: 3
 }
 
 #tree-nav treechildren::-moz-tree-cell-text(status),
@@ -76,6 +74,14 @@ treecol.value-column {
 
 #description-rowCount {
   text-align: right;
+}
+
+#tree-data treecol {
+  width: 50px;
+}
+
+#tree-data treecol.value-column {
+  width: 465px;
 }
 
 #tree-nav treechildren::-moz-tree-image(folder) {

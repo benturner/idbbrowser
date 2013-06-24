@@ -11,7 +11,7 @@ const REASON_APP_SHUTDOWN = 2;
 const URL_IDBBROWSERHELPER =
   "resource://" + PACKAGE_NAME + "/modules/IDBBrowserHelper.jsm";
 
-const DEBUG = true;
+const DEBUG = false;
 
 Cu.import("resource://gre/modules/Services.jsm");
 
