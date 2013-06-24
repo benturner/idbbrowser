@@ -6,7 +6,7 @@
 
 const { classes: Cc, interfaces: Ci, utils: Cu } = Components;
 
-const DEBUG = true;
+const DEBUG = false;
 
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 

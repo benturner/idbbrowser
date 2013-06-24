@@ -34,7 +34,7 @@ const ID_MENUITEM_IDBBROWSER_TOOLBAR = "menu_idbbrowser_toolbar";
 const WINDOW_TYPE_BROWSER = "navigator:browser";
 const WINDOW_TYPE_IDBBROWSER = "IDBBrowser:Browser";
 
-const DEBUG = true;
+const DEBUG = false;
 
 let globalObject = this;
 
@@ -379,12 +379,16 @@ const IDBBrowserHelper = {
       callback(results);
     }, function(reason) {
       dirIterator.close();
-      log("Directory iteration failed: " + reason);
+      if (DEBUG) log("Directory iteration failed: " + reason);
     });
   },
 
   originFromSanitizedDirectory: function(name) {
     let components = name.split("+");
+    if (components.length == 1) {
+      return name;
+    }
+
     let origin = "";
 
     // Check for appId.
@@ -441,8 +445,14 @@ const IDBBrowserHelper = {
   openWithOrigin: function(origin, name, version) {
     ensureIndexedDB();
 
-    let uri = Services.io.newURI(origin, null, null);
-    let principal = Services.scriptSecurityManager.getCodebasePrincipal(uri);
+    let principal;
+
+    if (origin == "chrome") {
+      principal = Services.scriptSecurityManager.getSystemPrincipal();
+    } else {
+      let uri = Services.io.newURI(origin, null, null);
+      principal = Services.scriptSecurityManager.getCodebasePrincipal(uri);
+    }
 
     return version == undefined ?
            indexedDB.openForPrincipal(principal, name) :

@@ -7,11 +7,13 @@ window {
   height: 600px;
 }
 
-listcol {
+listcol,
+treecol {
   -moz-box-flex: 1;
 }
 
-listcol.value-column {
+listcol.value-column,
+treecol.value-column {
   -moz-box-flex: 3
 }
 
