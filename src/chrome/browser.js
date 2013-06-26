@@ -373,7 +373,11 @@ const BrowserController = {
     let profileItem = document.getElementById("treechildren-nav").firstChild;
     profileItem.setAttribute("data-file-key", JSON.stringify(fileKey));
 
-    IDBBrowserHelper.getProfileFiles(this._buildProfileFilesTree.bind(this));
+    IDBBrowserHelper.getProfileFiles().then(function(results) {
+      this._buildProfileFilesTree(results);
+    }.bind(this), function(reason) {
+      throw new Error(reason);
+    });
   },
 
   openDatabase: function() {
@@ -644,6 +648,9 @@ const BrowserController = {
         this._populateMetadataDisplay(dbData.getDisplay(), false);
       }
     }.bind(this);
+    request.onerror = function(event) {
+      throw new Error(event.target.error.name);
+    };
   },
 
   _buildDatabaseTree: function(treeItemElement, dbData, key, isIDBKey) {
@@ -809,6 +816,9 @@ const BrowserController = {
         cursor.continue();
       }.bind(this);
     }.bind(this);
+    request.onerror = function(event) {
+      throw new Error(event.target.error.name);
+    };
   },
 
   _buildCustomFileTree: function(file) {

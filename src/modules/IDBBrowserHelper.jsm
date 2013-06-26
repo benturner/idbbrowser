@@ -303,62 +303,55 @@ const IDBBrowserHelper = {
 
   getProfileFiles: function(callback) {
     if (DEBUG) log("getProfileFiles");
-    let results = [];
 
     let directory = OS.Path.join(OS.Constants.Path.profileDir, "indexedDB");
     if (DEBUG) log("Searching profile folder: " + directory);
 
-    let dirIterator = new OS.File.DirectoryIterator(directory);
+    return Task.spawn(function() {
+      let results = [];
 
-    Task.spawn(function() {
-      while (true) {
-        let directory = yield dirIterator.next();
+      let dirIterator = new OS.File.DirectoryIterator(directory);
+      try {
+        yield dirIterator.forEach(originDir => {
+          let origin =
+            IDBBrowserHelper.originFromSanitizedDirectory(originDir.name);
+          if (DEBUG) log("Examining origin: " + origin);
 
-        let origin =
-          IDBBrowserHelper.originFromSanitizedDirectory(directory.name);
+          let idbDirectory = OS.Path.join(originDir.path, "idb");
 
-        if (DEBUG) log("Examining origin: " + origin);
-
-        let idbDirectory = OS.Path.join(directory.path, "idb");
-
-        let exists = yield OS.File.exists(idbDirectory);
-        if (!exists) {
-          if (DEBUG) log("No 'idb' folder!");
-          continue;
-        }
-
-        let fileIterator =
-          new OS.File.DirectoryIterator(idbDirectory);
-        while (true) {
-          let file;
-
-          try {
-            file = yield fileIterator.next();
-          } catch(e) {
-            if (e == StopIteration) {
-              if (DEBUG) log("No more files");
-              break;
+          return Task.spawn(function() {
+            if (!(yield OS.File.exists(idbDirectory))) {
+              return;
             }
-            fileIterator.close();
-            throw e;
-          }
+            let fileIterator =
+              new OS.File.DirectoryIterator(idbDirectory);
+            try {
+              yield fileIterator.forEach(file => {
+                // Skip directories.
+                if (file.isDir) {
+                  return;
+                }
 
-          // Skip directories and non-sqlite files.
-          if (file.isDir ||
-              file.name.substring(file.name.lastIndexOf(".")) != ".sqlite") {
-            if (DEBUG) log("Skipping '" + file.name + "'");
-            continue;
-          }
+                // Skip any non-sqlite files.
+                if (file.name.substring(file.name.lastIndexOf(".")) !=
+                    ".sqlite") {
+                  return;
+                }
 
-          let name = yield IDBBrowserHelper.getNameFromDatabaseFile(file.path);
-          results.push({ origin: origin, name: name });
-        }
-
-        // Clean up.
-        fileIterator.close();
+                return IDBBrowserHelper.getNameFromDatabaseFile(file.path)
+                                       .then(name => {
+                  results.push({ origin: origin, name: name });
+                });
+              });
+            }
+            finally {
+              fileIterator.close();
+            }
+          });
+        });
+      } finally {
+        dirIterator.close();
       }
-    }).then(function() {
-      dirIterator.close();
 
       results.sort(function(a, b) {
         if (a.origin < b.origin) {
@@ -376,10 +369,7 @@ const IDBBrowserHelper = {
         return 0;
       });
 
-      callback(results);
-    }, function(reason) {
-      dirIterator.close();
-      if (DEBUG) log("Directory iteration failed: " + reason);
+      throw new Task.Result(results);
     });
   },
 
@@ -478,15 +468,14 @@ const IDBBrowserHelper = {
 
   _prettyPrintReplacer: function(key, value) {
     let type = typeof(value);
-    if (type == "object") {
+    if (type == "object" && value !== null) {
       if (value.constructor.name == "Date") {
         return "<Date: '" + value.toLocaleString() + "'>";
       }
       if (value instanceof Ci.nsIDOMBlob) {
         return "<Blob: size = " + value.size + ", type = '" + value.type + "'>";
       }
-    }
-    if (type == "string") {
+    } else if (type == "string") {
       let length = value.length;
       if (length > 100) {
         return value.substring(0, 100) + "<..." + length + ">";
