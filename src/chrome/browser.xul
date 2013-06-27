@@ -19,12 +19,14 @@
         screenY="10"
         persist="screenX screenY width height sizemode">
 
-  <script type="text/javascript;version=1.7"
+  <script type="text/javascript;version=1.8"
           src="chrome://idbbrowser/content/browser.js"/>
 
   <commandset>
     <command id="command-open"
              oncommand="BrowserController.openDatabase();"/>
+    <command id="command-import"
+             oncommand="BrowserController.importDatabase();"/>
     <command id="command-newWindow"
              oncommand="BrowserController.newWindow();"/>
     <command id="command-exit"
@@ -36,6 +38,10 @@
          key="&command-open.shortcutkey;"
          modifiers="&command-open.modifiers;"
          command="command-open"/>
+    <key id="key-import"
+         key="&command-import.shortcutkey;"
+         modifiers="&command-import.modifiers;"
+         command="command-import"/>
     <key id="key-newWindow"
          key="&command-newWindow.shortcutkey;"
          modifiers="&command-newWindow.modifiers;"
@@ -63,6 +69,10 @@
                   accesskey="&command-open.accesskey;"
                   command="command-open"
                   key="key-open"/>
+        <menuitem label="&command-import.label;"
+                  accesskey="&command-import.accesskey;"
+                  command="command-import"
+                  key="key-import"/>
         <menuseparator/>
         <menuitem label="&command-exit.label;"
                   accesskey="&command-exit.accesskey;"
@@ -76,7 +86,7 @@
     <box id="box-nav">
       <tree id="tree-nav"
             hidecolumnpicker="true"
-            seltype="single"
+            seltype="text"
             persist="width height"
             onselect="BrowserController.handleNavSelect(event);">
         <treecols>
@@ -91,7 +101,7 @@
                         properties="folder"/>
             </treerow>
             <treechildren id="treechildren-profile">
-              <treeitem>
+              <treeitem id="treeitem-status">
                 <treerow>
                   <treecell id="treecell-status"
                             label="&treecell-searching.label;"
@@ -100,6 +110,8 @@
               </treeitem>
             </treechildren>
           </treeitem>
+          <treeseparator id="treeseparator-nav-profile"
+                         hidden="true"/>
         </treechildren>
       </tree>
       <splitter id="splitter-nav"

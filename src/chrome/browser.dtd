@@ -12,6 +12,11 @@
 <!ENTITY command-open.shortcutkey "o">
 <!ENTITY command-open.modifiers "accel">
 
+<!ENTITY command-import.label "Import External Database...">
+<!ENTITY command-import.accesskey "i">
+<!ENTITY command-import.shortcutkey "i">
+<!ENTITY command-import.modifiers "accel">
+
 <!ENTITY command-newWindow.label "New Window">
 <!ENTITY command-newWindow.accesskey "n">
 <!ENTITY command-newWindow.shortcutkey "n">

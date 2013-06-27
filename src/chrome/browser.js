@@ -8,21 +8,132 @@ const { classes: Cc, interfaces: Ci, utils: Cu } = Components;
 
 const DEBUG = false;
 
+const INDEXEDDB_FILE_FILTER = "*.sqlite";
+
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 
-XPCOMUtils.defineLazyModuleGetter(this, "Services", 
+XPCOMUtils.defineLazyModuleGetter(window, "Services",
   "resource://gre/modules/Services.jsm");
 
-XPCOMUtils.defineLazyModuleGetter(this, "IDBBrowserHelper", 
+XPCOMUtils.defineLazyModuleGetter(window, "IDBBrowserHelper",
   "resource://idbbrowser/modules/IDBBrowserHelper.jsm");
 
-XPCOMUtils.defineLazyModuleGetter(this, "FileUtils", 
-  "resource://gre/modules/FileUtils.jsm");
+XPCOMUtils.defineLazyModuleGetter(window, "Task",
+  "resource://gre/modules/Task.jsm");
+
+XPCOMUtils.defineLazyGetter(window, "Promise", function() {
+  let temp = {};
+  try {
+    Cu.import("resource://gre/modules/Promise.jsm", temp);
+  } catch(e) {
+    Cu.import("resource://gre/modules/commonjs/sdk/core/promise.js", temp);
+  }
+  return temp.Promise;
+});
+
+XPCOMUtils.defineLazyModuleGetter(window, "Sqlite",
+  "resource://gre/modules/Sqlite.jsm");
+
+XPCOMUtils.defineLazyModuleGetter(window, "OS",
+  "resource://gre/modules/osfile.jsm");
 
 function log(msg) {
   msg = "IDBBrowser:browser.js: " + msg;
   Services.console.logStringMessage(msg);
   dump(msg + "\n");
+}
+
+function deferThrow(exception) {
+  setTimeout(function() { throw exception; }, 0);
+}
+
+function makeDeferred() {
+  let deferred = Promise.defer();
+  let accept = "accept" in deferred ? deferred["accept"] : deferred["resolve"];
+  return { promise: deferred.promise,
+           accept: accept,
+           reject: deferred.reject };
+}
+
+// Returns Promise<bool> saying whether the directory was created or not.
+function makeDir(path) {
+  let { promise, accept, reject } = makeDeferred();
+  OS.File.makeDir(path).then(result => {
+    accept(true);
+  },
+  reason => {
+    if (reason && reason instanceof OS.File.Error && reason.becauseExists) {
+      accept(false);
+    } else {
+      reject(reason);
+    }
+  });
+  return promise;
+}
+
+// Returns Promise<void>.
+function recursiveCopy(srcDir, destDir) {
+  return Task.spawn(function() {
+    let srcInfo;
+
+    try {
+      srcInfo = yield OS.File.stat(srcDir);
+    } catch (e if e instanceof OS.File.Error && e.becauseNoSuchFile) {
+      // Nothing to do if the source directory doesn't exist.
+      return;
+    }
+
+    if (!srcInfo.isDir) {
+      throw new Error("'" + srcDir + "' is not a directory!");
+    }
+
+    yield makeDir(destDir);
+
+    let iterator = new OS.File.DirectoryIterator(srcDir);
+    try {
+      yield iterator.forEach(entry => {
+        let targetPath = OS.Path.join(destDir, entry.name);
+        return entry.isDir ?
+               recursiveCopy(entry.path, targetPath):
+               OS.File.copy(entry.path, targetPath);
+      });
+    }
+    finally {
+      iterator.close();
+    }
+  });
+}
+
+// Returns Promise<void>.
+function recursiveDelete(srcDir) {
+  return Task.spawn(function() {
+    let srcInfo;
+
+    try {
+      srcInfo = yield OS.File.stat(srcDir);
+    } catch (e if e instanceof OS.File.Error && e.becauseNoSuchFile) {
+      // Nothing to do if the source directory doesn't exist.
+      return;
+    }
+
+    if (!srcInfo.isDir) {
+      throw new Error("'" + srcDir + "' is not a directory!");
+    }
+
+    let iterator = new OS.File.DirectoryIterator(srcDir);
+    try {
+      yield iterator.forEach(entry => {
+        return entry.isDir ?
+               recursiveDelete(entry.path) :
+               OS.File.remove(entry.path);
+      });
+    }
+    finally {
+      iterator.close();
+    }
+
+    yield OS.File.removeEmptyDir(srcDir);
+  });
 }
 
 function IndexMetadata(index) {
@@ -364,36 +475,48 @@ const BrowserController = {
     this._dataTreeView = new TreeView();
     document.getElementById("tree-data").view = this._dataTreeView;
 
-    if (!IDBBrowserHelper.supportsOpenWithFile()) {
+    if (!this._supportsOpenWithFile()) {
       document.getElementById("command-open").setAttribute("disabled", "true");
+      document.getElementById("command-open").setAttribute("hidden", "true");
     }
 
-    let fileKey = [ FileUtils.getDir("ProfD", ["indexedDB"]).path ];
-
-    let profileItem = document.getElementById("treechildren-nav").firstChild;
-    profileItem.setAttribute("data-file-key", JSON.stringify(fileKey));
-
-    IDBBrowserHelper.getProfileFiles().then(function(results) {
+    this._getProfileFiles().then(function(results) {
       this._buildProfileFilesTree(results);
-    }.bind(this), function(reason) {
-      throw new Error(reason);
-    });
+    }.bind(this), deferThrow);
   },
 
   openDatabase: function() {
     if (DEBUG) log("openDatabase");
 
     let fp = Cc["@mozilla.org/filepicker;1"].createInstance(Ci.nsIFilePicker);
-    fp.init(window, this._stringBundle.getString("openFile-title"),
+    fp.init(window, this._stringBundle.getString("openFile.title"),
             Ci.nsIFilePicker.modeOpen);
 
-    fp.appendFilter(this._stringBundle.getString("openFile-filter-title"),
-                    "*.sqlite; *.idb");
+    fp.appendFilter(this._stringBundle.getString("indexedDB-file-filter.title"),
+                    INDEXEDDB_FILE_FILTER);
     fp.appendFilters(Ci.nsIFilePicker.filterAll);
 
     fp.open(function(result) {
       if (result != Ci.nsIFilePicker.returnCancel) {
         this._buildCustomFileTree(fp.file);
+      }
+    }.bind(this));
+  },
+
+  importDatabase: function() {
+    if (DEBUG) log("importDatabase");
+
+    let fp = Cc["@mozilla.org/filepicker;1"].createInstance(Ci.nsIFilePicker);
+    fp.init(window, this._stringBundle.getString("importFile.title"),
+            Ci.nsIFilePicker.modeOpen);
+
+    fp.appendFilter(this._stringBundle.getString("indexedDB-file-filter.title"),
+                    INDEXEDDB_FILE_FILTER);
+    fp.appendFilters(Ci.nsIFilePicker.filterAll);
+
+    fp.open(function(result) {
+      if (result != Ci.nsIFilePicker.returnCancel) {
+        this._importDatabaseIntoProfile(fp.file);
       }
     }.bind(this));
   },
@@ -429,12 +552,7 @@ const BrowserController = {
     let element = view.getItemAtIndex(rowIndex);
 
     let [ key, isIDBKey ] = this._getKeyFromElement(element);
-    if (!key) {
-      return;
-    }
-
-    if (key.length < 2) {
-      if (DEBUG) log("Bad key: " + JSON.stringify(key));
+    if (!key || key.length < 2) {
       return;
     }
 
@@ -506,23 +624,21 @@ const BrowserController = {
   },
 
   _errorHandler: function(message, filename, lineNumber) {
-    alert("Error: '" + message + "' (" + filename + ":" + lineNumber + ")");
+    alert(message + "' (" + filename + ":" + lineNumber + ")");
   },
 
   _buildProfileFilesTree: function(infoPairs) {
     if (DEBUG) log("_buildProfileFilesTree");
 
     if (!infoPairs.length) {
-      let statusElement = document.getElementById("treecell-status");
+      let statusCell = document.getElementById("treecell-status");
       let label = this._stringBundle.getString("nav-tree.no-files");
-      statusElement.setAttribute("label", label);
+      statusCell.setAttribute("label", label);
       return;
     }
 
-    let profileElement = document.getElementById("treechildren-profile");
-    while (profileElement.firstChild) {
-      profileElement.removeChild(profileElement.firstChild);
-    }
+    let statusItem = document.getElementById("treeitem-status");
+    statusItem.setAttribute("hidden", "true");
 
     let originItems = [];
 
@@ -536,6 +652,7 @@ const BrowserController = {
       if (infoPair.origin != currentOrigin) {
         let item = document.createElement("treeitem");
         item.setAttribute("container", "true");
+        item.setAttribute("data-idb-key", JSON.stringify([ infoPair.origin ]));
         originItems.push(item);
 
         let row = document.createElement("treerow");
@@ -565,6 +682,8 @@ const BrowserController = {
       cell.setAttribute("properties", "database unloaded");
       row.appendChild(cell);
     }
+
+    let profileElement = document.getElementById("treechildren-profile");
 
     for (let i in originItems) {
       profileElement.appendChild(originItems[i]);
@@ -629,8 +748,8 @@ const BrowserController = {
     let requestSerial = ++this._currentMetadataRequestSerial;
 
     let request = isIDBKey ?
-                  IDBBrowserHelper.openWithOrigin(key[0], key[1]) :
-                  IDBBrowserHelper.openWithFile(key[0], key[1]);
+                  this._openWithOrigin(key[0], key[1]) :
+                  this._openWithFile(OS.Path.join(key[0], key[1]));
     request.onsuccess = function(event) {
       let db = event.target.result;
 
@@ -758,8 +877,8 @@ const BrowserController = {
     let requestSerial = ++this._currentDataRequestSerial;
 
     let request = isIDBKey ?
-                  IDBBrowserHelper.openWithOrigin(key[0], key[1]) :
-                  IDBBrowserHelper.openWithFile(key[0], key[1]);
+                  this._openWithOrigin(key[0], key[1]) :
+                  this._openWithFile(OS.Path.join(key[0], key[1]));
     request.onsuccess = function(event) {
       let db = event.target.result;
 
@@ -805,12 +924,12 @@ const BrowserController = {
         }
 
         let data = isIndex ?
-                    [ IDBBrowserHelper.keyToDisplayText(cursor.key),
-                      IDBBrowserHelper.keyToDisplayText(cursor.primaryKey),
-                      IDBBrowserHelper.valueToDisplayText(cursor.value) ] :
-                    [ IDBBrowserHelper.keyToDisplayText(cursor.key),
+                    [ BrowserController._keyToDisplayText(cursor.key),
+                      BrowserController._keyToDisplayText(cursor.primaryKey),
+                      BrowserController._valueToDisplayText(cursor.value) ] :
+                    [ BrowserController._keyToDisplayText(cursor.key),
                       undefined,
-                      IDBBrowserHelper.valueToDisplayText(cursor.value) ];
+                      BrowserController._valueToDisplayText(cursor.value) ];
         treeView.pushRowData(data);
 
         cursor.continue();
@@ -877,5 +996,454 @@ const BrowserController = {
     cell.setAttribute("label", file.leafName);
     cell.setAttribute("properties", "database unloaded");
     row.appendChild(cell);
-  }
+  },
+
+  _importDatabaseIntoProfile: function(file) {
+    if (DEBUG) log("_importDatabaseIntoProfile");
+
+    if (file.leafName.substring(file.leafName.lastIndexOf(".")) != ".sqlite") {
+      if (DEBUG) log("Not importing '" + file.path + "'");
+      let { promise, accept } = makeDeferred();
+      accept();
+      return promise;
+    }
+
+    let idbPath = OS.Path.join(OS.Constants.Path.profileDir, "indexedDB");
+    let dbPath = OS.Path.join(idbPath, "chrome", "idb", file.leafName);
+
+    Task.spawn(function() {
+      let currentPath = OS.Path.join(idbPath, "chrome");
+      let fileManagerName =
+        file.leafName.substring(0, file.leafName.lastIndexOf("."));
+
+      // Make sure that the selected database is actually an indexedDB database.
+      let dbName = yield BrowserController._getNameFromDatabaseFile(file.path);
+
+      // See if the target path already exists.
+      if (yield OS.File.exists(dbPath)) {
+        // Ask if the database should be overwritten.
+        let title =
+          BrowserController._stringBundle.getString("importOverwrite.title");
+        let prompt =
+          BrowserController._stringBundle.getString("importOverwrite.prompt");
+        let result = Cc["@mozilla.org/embedcomp/prompt-service;1"].
+                     getService(Ci.nsIPromptService).
+                     confirm(window, title, prompt);
+        if (!result) {
+          // Don't overwrite, just bail without changing the nav tree.
+          throw new Task.Result();
+        }
+
+        // Delete the old database and all the files in its file directory.
+        yield OS.File.remove(dbPath);
+        yield recursiveDelete(OS.Path.join(currentPath, "idb",
+                                           fileManagerName));
+      }
+
+      // Make the directory structure if it doesn't already exist.
+      let created = yield makeDir(currentPath);
+      if (created) {
+        // The ".metadata" file is a marker for folder upgrade introduced in
+        // Firefox 22.
+        let metadata =
+          yield OS.File.open(OS.Path.join(currentPath, ".metadata"),
+                             { create: true });
+        yield metadata.close();
+      }
+
+      currentPath = OS.Path.join(currentPath, "idb");
+      yield makeDir(currentPath);
+
+      // Make the directory for files.
+      let fileManagerPath = OS.Path.join(currentPath, fileManagerName);
+      yield makeDir(fileManagerPath);
+
+      // Copy all the files.
+      let origFileManagerPath = OS.Path.join(file.parent.path, fileManagerName);
+      yield recursiveCopy(origFileManagerPath, fileManagerPath);
+
+      // Finally copy the actual database.
+      yield OS.File.copy(file.path, OS.Path.join(currentPath, file.leafName));
+
+      throw new Task.Result(dbName);
+    }).then(result => {
+      // Rebuild
+      if (typeof(result) == "string") {
+        BrowserController._insertImportedDatabaseTreeItem(result);
+      }
+    }, deferThrow);
+  },
+
+  _getProfileFiles: function() {
+    if (DEBUG) log("getProfileFiles");
+
+    let directory = OS.Path.join(OS.Constants.Path.profileDir, "indexedDB");
+    if (DEBUG) log("Searching profile folder: " + directory);
+
+    return Task.spawn(function() {
+      let results = [];
+
+      let dirIterator = new OS.File.DirectoryIterator(directory);
+      try {
+        yield dirIterator.forEach(originDir => {
+          let origin =
+            BrowserController._originFromSanitizedDirectory(originDir.name);
+          if (DEBUG) log("Examining origin: " + origin);
+
+          let idbDirectory = OS.Path.join(originDir.path, "idb");
+
+          return Task.spawn(function() {
+            if (!(yield OS.File.exists(idbDirectory))) {
+              return;
+            }
+            let fileIterator =
+              new OS.File.DirectoryIterator(idbDirectory);
+            try {
+              yield fileIterator.forEach(file => {
+                // Skip directories.
+                if (file.isDir) {
+                  return;
+                }
+
+                // Skip any non-sqlite files.
+                if (file.name.substring(file.name.lastIndexOf(".")) !=
+                    ".sqlite") {
+                  return;
+                }
+
+                return BrowserController._getNameFromDatabaseFile(file.path)
+                                        .then(name => {
+                  results.push({ origin: origin, name: name });
+                });
+              });
+            }
+            finally {
+              fileIterator.close();
+            }
+          });
+        });
+      } finally {
+        dirIterator.close();
+      }
+
+      results.sort(function(a, b) {
+        if (a.origin == "chrome" && b.origin != "chrome") {
+          return -1;
+        }
+        if (a.origin != "chrome" && b.origin == "chrome") {
+          return 1;
+        }
+        if (a.origin < b.origin) {
+          return -1;
+        }
+        if (a.origin > b.origin) {
+          return 1;
+        }
+        if (a.name < b.name) {
+          return -1;
+        }
+        if (a.name > b.name) {
+          return 1;
+        }
+        return 0;
+      });
+
+      throw new Task.Result(results);
+    });
+  },
+
+  _originFromSanitizedDirectory: function(name) {
+    let components = name.split("+");
+    if (components.length == 1) {
+      return name;
+    }
+
+    let origin = "";
+
+    // Check for appId.
+    let match = components[0].match(/\d+/);
+    if (match && match[0] == components[0]) {
+      // Prepend appId + browser flag.
+      origin += components[0] + "+" + components[1] + "+";
+      components.splice(0, 2);
+    }
+
+    // Strip empty components. This may not work correctly all the time.
+    components = components.filter(function(s) { return !!s; });
+
+    let isFile = components[0] == "file";
+
+    // Take care of protocol.
+    origin += components[0] + "://";
+    components.splice(0, 1);
+
+    if (isFile) {
+      origin += "/";
+
+      if ("winGetDrive" in OS.Path) {
+        // On Windows, first component should be drive letter.
+        origin += components[0] + ":/";
+        components.splice(0, 1);
+      }
+
+      origin += components.join("/");
+    } else {
+      // Check for port.
+      let port;
+      match = components[components.length - 1].match(/\d+/);
+      if (match && match[0] == components[components.length - 1]) {
+        port = match[0];
+        components.splice(components.length - 1, 1);
+      }
+
+      origin += components.join("");
+
+      if (port) {
+        origin += ":" + port;
+      }
+    }
+
+    return origin;
+  },
+
+  _getNameFromDatabaseFile: function(path) {
+    return Task.spawn(function() {
+      if (DEBUG) log("Opening '" + path + "'");
+
+      let connection = yield Sqlite.openConnection({ path: path });
+
+      let rows = yield connection.execute("SELECT name FROM database");
+      if (rows.length != 1) {
+        throw new Error("'database' table has " + rows.length + " rows");
+      }
+
+      let name = rows[0].getResultByName("name");
+
+      yield connection.close();
+
+      if (DEBUG) log("Determined database name '" + name + "'");
+      throw new Task.Result(name);
+    });
+  },
+
+  _ensureIndexedDB: function() {
+    if (!("indexedDB" in window)) {
+      let idbManager = Cc["@mozilla.org/dom/indexeddb/manager;1"].
+                       getService(Ci.nsIIndexedDatabaseManager);
+      idbManager.initWindowless(window);
+    }
+  },
+
+  _openWithOrigin: function(origin, name, version) {
+    if (DEBUG) log("_openWithOrigin");
+
+    this._ensureIndexedDB();
+
+    let principal;
+
+    if (origin == "chrome") {
+      principal = Services.scriptSecurityManager.getSystemPrincipal();
+    } else {
+      let uri = Services.io.newURI(origin, null, null);
+      principal = Services.scriptSecurityManager.getCodebasePrincipal(uri);
+    }
+
+    return version == undefined ?
+           indexedDB.openForPrincipal(principal, name) :
+           indexedDB.openForPrincipal(principal, name, version);
+  },
+
+  _openWithFile: function(path, version) {
+    if (DEBUG) log("_openWithFile");
+
+    ensureIndexedDB();
+
+    if (DEBUG) log("Opening '" + path + "'");
+
+    return version == undefined ?
+           indexedDB.openFile(path) :
+           indexedDB.openFile(path, version);
+  },
+
+  _supportsOpenWithFile: function() {
+    this._ensureIndexedDB();
+
+    return "openFile" in indexedDB;
+  },
+
+  _prettyPrintReplacer: function(key, value) {
+    let type = typeof(value);
+    if (type == "object" && value !== null) {
+      if (value.constructor.name == "Date") {
+        return "<Date: '" + value.toLocaleString() + "'>";
+      }
+      if (value instanceof Ci.nsIDOMFile) {
+        return "<Blob: name = \"" + value.name + "\", size = " + value.size +
+               ", type = \"" + value.type + "\", lastModifiedDate = " +
+               value.lastModifiedDate.toLocaleString() + ">";
+      }
+      if (value instanceof Ci.nsIDOMBlob) {
+        return "<Blob: size = " + value.size + ", type = \"" + value.type +
+               "\">";
+      }
+    } else if (type == "string") {
+      let length = value.length;
+      if (length > 100) {
+        return value.substring(0, 100) + "<..." + length + ">";
+      }
+    }
+    return value;
+  },
+
+  _keyToDisplayText: function(key) {
+    let type = typeof(key);
+    if (type == "string") {
+      return "\"" + key + "\"";
+    }
+    if (type == "number") {
+      return key.toString();
+    }
+    let tmp = this._prettyPrintReplacer(undefined, key);
+    if (typeof(tmp) == "string") {
+      return tmp;
+    }
+    if (type == "object") {
+      if (key.constructor.name == "Array") {
+        return JSON.stringify(key, this._prettyPrintReplacer);
+      }
+    }
+    return undefined;
+  },
+
+  _valueToDisplayText: function(value) {
+    let valueAsKey = this._keyToDisplayText(value);
+    if (valueAsKey !== undefined) {
+      return valueAsKey;
+    }
+    if (value === undefined || value === null || value === true ||
+        value === false) {
+      return value + "";
+    }
+    return JSON.stringify(value, this._prettyPrintReplacer);
+  },
+
+  _rebuildProfileFilesTree: function() {
+    if (DEBUG) log("_rebuildProfileFilesTree");
+
+    let profileElement = document.getElementById("treechildren-profile");
+    let profileItems = profileElement.children;
+
+    let itemsToRemove = [];
+
+    for (let i = 0; i < profileItems.length; i++) {
+      let profileItem = profileItems[i];
+      if (profileItem.id != "treeitem-status") {
+        itemsToRemove.push(profileItem);
+      }
+    }
+
+    for (let i in itemsToRemove) {
+      profileElement.removeChild(itemsToRemove[i]);
+    }
+
+    let statusCell = document.getElementById("treecell-status");
+    let label = this._stringBundle.getString("nav-tree.searching");
+    statusCell.setAttribute("label", label);
+
+    document.getElementById("treeitem-status").removeAttribute("hidden");
+
+    this._getProfileFiles().then(function(results) {
+      this._buildProfileFilesTree(results);
+    }.bind(this), deferThrow);
+  },
+
+  _insertImportedDatabaseTreeItem: function(name) {
+    if (DEBUG) log("_insertImportedDatabaseTreeItem");
+    const chromeOrigin = "chrome";
+
+    let profileTreeChildren = document.getElementById("treechildren-profile");
+    let profileItems = profileTreeChildren.children;
+
+    let targetTreeChildren = profileTreeChildren;
+
+    for (let i = 0; i < profileItems.length; i++) {
+      let profileItem = profileItems[i];
+      if (profileItem.hasAttribute("data-idb-key")) {
+        let idbKey = JSON.parse(profileItem.getAttribute("data-idb-key"));
+        if (idbKey[0] == chromeOrigin) {
+          profileItem.setAttribute("open", "true");
+          targetTreeChildren = profileItem.firstChild.nextElementSibling;
+          break;
+        }
+      }
+    }
+
+    if (targetTreeChildren == profileTreeChildren) {
+      // Didn't find chrome origin, make a new one.
+      let item = document.createElement("treeitem");
+      item.setAttribute("data-idb-key", JSON.stringify([ chromeOrigin ]));
+      item.setAttribute("container", "true");
+      item.setAttribute("open", "true");
+
+      targetTreeChildren.insertBefore(item, targetTreeChildren.firstChild);
+
+      let row = document.createElement("treerow");
+      item.appendChild(row);
+
+      let cell = document.createElement("treecell");
+      cell.setAttribute("label", chromeOrigin);
+      cell.setAttribute("properties", "origin");
+      row.appendChild(cell);
+
+      targetTreeChildren = document.createElement("treechildren");
+      item.appendChild(targetTreeChildren);
+    }
+
+    // Find the previous item for this database (if it exists) and the insertion
+    // spot for the new item.
+    let nextItem;
+    let oldItem;
+
+    let chromeItems = targetTreeChildren.children;
+    for (let i = 0; i < chromeItems.length; i++) {
+      let chromeItem = chromeItems[i];
+      let itemName = JSON.parse(chromeItem.getAttribute("data-idb-key"))[1];
+      if (itemName == name) {
+        oldItem = chromeItem;
+      } else if (!nextItem && itemName > name) {
+        nextItem = chromeItem;
+        break;
+      }
+    }
+
+    if (oldItem) {
+      targetTreeChildren.removeChild(oldItem);
+
+      if ((chromeOrigin in this._loadedDatabases) &&
+          (name in this._loadedDatabases[chromeOrigin])) {
+        delete this._loadedDatabases[chromeOrigin][name];
+      }
+    }
+
+    let idbKey = [ chromeOrigin, name ];
+
+    let item = document.createElement("treeitem");
+    item.setAttribute("data-idb-key", JSON.stringify(idbKey));
+    targetTreeChildren.appendChild(item);
+
+    let row = document.createElement("treerow");
+    item.appendChild(row);
+
+    let cell = document.createElement("treecell");
+    cell.setAttribute("label", name);
+    cell.setAttribute("properties", "database unloaded");
+    row.appendChild(cell);
+
+    let tree = document.getElementById("tree-nav");
+    let rowIndex = tree.view.getIndexOfItem(item);
+
+    tree.treeBoxObject.ensureRowIsVisible(rowIndex);
+    tree.view.selection.select(rowIndex);
+    tree.focus();
+  },
 };
