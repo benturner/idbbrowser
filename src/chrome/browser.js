@@ -508,9 +508,11 @@ const BrowserController = {
       document.getElementById("command-open").setAttribute("hidden", "true");
     }
 
-    this._getProfileFiles().then(function(results) {
-      this._buildProfileFilesTree(results);
-    }.bind(this), deferThrow);
+    Task.spawn(function() {
+      yield this._sanitizeProfile();
+      let profileFiles = yield this._getProfileFiles();
+      this._buildProfileFilesTree(profileFiles);
+    }.bind(this)).then(null, deferThrow);
   },
 
   openDatabase: function() {
@@ -1204,6 +1206,8 @@ const BrowserController = {
             }
           });
         });
+      } catch(e if e instanceof OS.File.Error && e.becauseNoSuchFile) {
+        // Nothing to do here.
       } finally {
         dirIterator.close();
       }
@@ -1616,5 +1620,39 @@ const BrowserController = {
     if (canceled) {
       this._dataTreeView.cancel();
     }
+  },
+
+  _sanitizeProfile: function() {
+    let directory = OS.Path.join(OS.Constants.Path.profileDir, "indexedDB");
+    if (DEBUG) log("Sanitizing profile folder: " + directory);
+
+    function recursiveSearchDelete(srcDir) {
+      return Task.spawn(function() {
+        let srcInfo;
+        try {
+          srcInfo = yield OS.File.stat(srcDir);
+        } catch (e if e instanceof OS.File.Error && e.becauseNoSuchFile) {
+          // Nothing to do if the source directory doesn't exist.
+          return;
+        }
+
+        let iterator = new OS.File.DirectoryIterator(srcDir);
+        try {
+          yield iterator.forEach(entry => {
+            if (entry.isDir) {
+              return recursiveSearchDelete(entry.path);
+            }
+            if (entry.name == ".DS_Store") {
+              return OS.File.remove(entry.path);
+            }
+          });
+        }
+        finally {
+          iterator.close();
+        }
+      });
+    }
+
+    return recursiveSearchDelete(directory);
   }
 };
