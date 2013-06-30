@@ -23,7 +23,7 @@ window {
   margin-bottom: 5px;
 }
 
-#tree-nav treecol {
+#tree-nav treecol[primary="true"] {
   -moz-box-flex: 1;
 }
 
@@ -45,7 +45,7 @@ window {
   -moz-box-flex: 1;
 }
 
-#listbox-metadata listcol.value-column {
+#listbox-metadata listcol[primary="true"] {
   -moz-box-flex: 3
 }
 
@@ -80,8 +80,13 @@ window {
   width: 50px;
 }
 
-#tree-data treecol.value-column {
+#tree-data treecol[primary="true"] {
   width: 465px;
+}
+
+#tree-data treechildren::-moz-tree-cell-text(loading) {
+  color: GrayText;
+  font-style: italic;
 }
 
 #tree-nav treechildren::-moz-tree-image(folder) {
@@ -92,7 +97,125 @@ window {
   list-style-image: url(chrome://global/skin/dirListing/folder.png);
 }
 
-#tree-data treechildren::-moz-tree-cell-text(loading) {
-  color: GrayText;
-  font-style: italic;
+#treecol-nav-primary {
+  -moz-box-flex: 1;
+}
+
+#treecol-nav-button {
+  min-width: 24px;
+}
+
+#tree-nav treechildren::-moz-tree-row {
+  min-height: 24px;
+}
+
+/* Normal drop shadow */
+#tree-nav treechildren::-moz-tree-cell(button, hover, objectStore),
+#tree-nav treechildren::-moz-tree-cell(button, hover, index),
+#tree-nav treechildren::-moz-tree-cell(button, cell-hover, objectStore),
+#tree-nav treechildren::-moz-tree-cell(button, cell-hover, index) {
+  padding: 2px;
+  background-image: radial-gradient(circle at 50% 60%,
+                                    rgba(181, 189, 200, 0.5) 0%,
+                                    rgba(181, 189, 200, 0.5) 50%,
+                                    rgba(181, 189, 200, 0) 80%);
+  border-radius: 50%;
+}
+
+/* Normal drop shadow (active) */
+#tree-nav treechildren::-moz-tree-cell(button, cell-active, objectStore),
+#tree-nav treechildren::-moz-tree-cell(button, cell-active, index) {
+  background-image: radial-gradient(circle at 50% 60%,
+                                    rgba(107, 123, 133, 0.5) 0%,
+                                    rgba(107, 123, 133, 0.5) 50%,
+                                    rgba(107, 123, 133, 0) 80%);
+  border-radius: 50%;
+}
+
+/* Loading drop shadow */
+#tree-nav treechildren::-moz-tree-cell(button, objectStore, loading),
+#tree-nav treechildren::-moz-tree-cell(button, index, loading) {
+  padding: 2px;
+  background-image: none;
+}
+
+/* Normal button */
+#tree-nav treechildren::-moz-tree-image(button, hover, objectStore),
+#tree-nav treechildren::-moz-tree-image(button, hover, index),
+#tree-nav treechildren::-moz-tree-image(button, cell-hover, objectStore),
+#tree-nav treechildren::-moz-tree-image(button, cell-hover, index) {
+  list-style-image: url(chrome://browser/skin/Toolbar-inverted.png);
+  -moz-image-region: rect(0px, 36px, 18px, 18px);
+  padding: 0px;
+  background-image: linear-gradient(to bottom,
+                                    rgba(181, 189, 200, 1) 0%,
+                                    rgba(130, 140, 149, 1) 36%,
+                                    rgba(40, 52, 59, 1) 100%);
+  background-clip: padding-box;
+  border: 1px solid;
+  border-radius: 50%;
+  border-color: rgba(40, 52, 59, 0.6)
+                rgba(40, 52, 59, 0.4)
+                rgba(40, 52, 59, 0.2);
+}
+
+/* Normal button (hover) */
+#tree-nav treechildren::-moz-tree-image(button, cell-hover, objectStore),
+#tree-nav treechildren::-moz-tree-image(button, cell-hover, index) {
+  background-image: linear-gradient(to bottom,
+                                    rgba(210, 212, 216, 1) 0%,
+                                    rgba(175, 179, 183, 1) 36%,
+                                    rgba(107, 123, 133, 1) 100%);
+  border-color: rgba(107, 123, 133, 0.6)
+                rgba(107, 123, 133, 0.4)
+                rgba(107, 123, 133, 1);
+}
+
+/* Normal button (active) */
+#tree-nav treechildren::-moz-tree-image(button, cell-active, objectStore),
+#tree-nav treechildren::-moz-tree-image(button, cell-active, index) {
+  background-image: linear-gradient(to bottom,
+                                    rgba(121,135,155,1) 0%,
+                                    rgba(93,102,109,1) 36%,
+                                    rgba(29,38,43,1) 100%);
+
+  border-color: rgba(65, 65, 65, 0.6)
+                rgba(65, 65, 65, 0.4)
+                rgba(65, 65, 65, 0.2);
+}
+
+/* Loading button */
+#tree-nav treechildren::-moz-tree-image(button, objectStore, loading),
+#tree-nav treechildren::-moz-tree-image(button, index, loading) {
+  list-style-image: url(chrome://browser/skin/sync-throbber.png);
+  background-image: none;
+  border: none;
+}
+
+/* Cancel button (hover) */
+#tree-nav treechildren::-moz-tree-image(button, cell-hover, objectStore, loading),
+#tree-nav treechildren::-moz-tree-image(button, cell-hover, index, loading) {
+  list-style-image: url(chrome://browser/skin/Toolbar-inverted.png);
+  -moz-image-region: rect(0px, 54px, 18px, 36px);
+  background-image: linear-gradient(to bottom,
+                                    rgba(181, 189, 200, 1) 0%,
+                                    rgba(130, 140, 149, 1) 36%,
+                                    rgba(40, 52, 59, 1) 100%);
+  border: 1px solid;
+  border-color: rgba(40, 52, 59, 0.6)
+                rgba(40, 52, 59, 0.4)
+                rgba(40, 52, 59, 0.2);
+}
+
+/* Cancel button (actve) */
+#tree-nav treechildren::-moz-tree-image(button, cell-active, objectStore, loading),
+#tree-nav treechildren::-moz-tree-image(button, cell-active, index, loading) {
+  background-image: linear-gradient(to bottom,
+                                    rgba(121,135,155,1) 0%,
+                                    rgba(93,102,109,1) 36%,
+                                    rgba(29,38,43,1) 100%);
+
+  border-color: rgba(65, 65, 65, 0.6)
+                rgba(65, 65, 65, 0.4)
+                rgba(65, 65, 65, 0.2);
 }

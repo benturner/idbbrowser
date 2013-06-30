@@ -32,7 +32,6 @@
 
 <!ENTITY listheader-metadata-key.label "Key">
 <!ENTITY listheader-metadata-value.label "Value">
-<!ENTITY button-load.label "Load Data >>">
 
 <!ENTITY treecol-data-key.label "Key">
 <!ENTITY treecol-data-primaryKey.label "Primary Key">

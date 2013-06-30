@@ -88,10 +88,22 @@
             hidecolumnpicker="true"
             seltype="text"
             persist="width height"
-            onselect="BrowserController.handleNavSelect(event);">
+            onselect="BrowserController.handleNavSelect(event);"
+            onclick="BrowserController.handleNavClick(event);"
+            onkeypress="BrowserController.handleNavKeypress(event);"
+            onmousedown="BrowserController.handleNavMousedown(event);"
+            onmouseup="BrowserController.handleNavMouseup(event);"
+            onmousemove="BrowserController.handleNavMousemove(event);"
+            onmouseleave="BrowserController.handleNavMouseleave(event);">
         <treecols>
-          <treecol primary="true"
+          <treecol id="treecol-nav-primary"
+                   primary="true"
                    hideheader="true"/>
+          <treecol id="treecol-nav-button"
+                   hideheader="true"
+                   selectable="false"/>
+          <treecol hideheader="true"
+                   selectable="false"/>
         </treecols>
         <treechildren id="treechildren-nav">
           <treeitem container="true"
@@ -106,6 +118,7 @@
                   <treecell id="treecell-status"
                             label="&treecell-searching.label;"
                             properties="status"/>
+                  <treecell/>
                 </treerow>
               </treeitem>
             </treechildren>
@@ -124,17 +137,13 @@
                persist="width height">
         <listcols>
           <listcol/>
-          <listcol class="value-column"/>
+          <listcol primary="true"/>
         </listcols>
         <listhead>
           <listheader label="&listheader-metadata-key.label;"/>
           <listheader label="&listheader-metadata-value.label;"/>
         </listhead>
       </listbox>
-      <button id="button-load"
-              label="&button-load.label;"
-              disabled="true"
-              onclick="BrowserController.handleLoadClick(event)"/>
     </box>
     <splitter id="splitter-main"
               collapse="before"
@@ -152,7 +161,6 @@
                    anonid="0"
                    label="&treecol-data-key.label;"
                    ordinal="0"
-                   primary="true"
                    persist="width ordinal hidden"/>
           <splitter class="tree-splitter"
                     resizeafter="grow"/>
@@ -169,7 +177,7 @@
                    label="&treecol-data-value.label;"
                    ordinal="2"
                    persist="width ordinal hidden"
-                   class="value-column"/>
+                   primary="true"/>
           <splitter class="tree-splitter"
                     resizeafter="grow"/>
         </treecols>

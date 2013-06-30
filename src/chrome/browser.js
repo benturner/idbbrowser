@@ -136,6 +136,25 @@ function recursiveDelete(srcDir) {
   });
 }
 
+function addProperty(element, property) {
+  let properties;
+  if (element.hasAttribute("properties")) {
+    properties = element.getAttribute("properties") + " " + property;
+  } else {
+    properties = property;
+  }
+  element.setAttribute("properties", properties);
+}
+
+function removeProperty(element, property) {
+  if (!element.hasAttribute("properties")) {
+    return;
+  }
+  let properties = element.getAttribute("properties");
+  properties = properties.replace(property, "").replace(/^\s+|\s+$/g, "");
+  element.setAttribute("properties", properties);
+}
+
 function IndexMetadata(index) {
   this._name = index.name;
   this._keyPath = JSON.stringify(index.keyPath);
@@ -281,6 +300,7 @@ TreeView.prototype = {
   _data: null,
   _firstDirtyIndex: -1,
   _flushTimeout: null,
+  _canceled: false,
 
   // nsITreeView
   get rowCount() {
@@ -371,7 +391,7 @@ TreeView.prototype = {
   getCellText: function(index, column) {
     if (index >= this._data.length) {
       if (column.index == 0) {
-        return "Loading...";
+        return this._canceled ? "<Canceled>" : "<Loading...>";
       }
       return "";
     }
@@ -426,6 +446,7 @@ TreeView.prototype = {
     let removedCount = this.rowCount * -1;
     this._data = [];
     this._rowCount = 0;
+    this._canceled = false;
     this.treeBox.rowCountChanged(0, removedCount);
   },
 
@@ -454,6 +475,10 @@ TreeView.prototype = {
                                    this._data.length - 1);
       this._firstDirtyIndex = -1;
     }
+  },
+
+  cancel: function() {
+    this._canceled = true;
   }
 };
 
@@ -464,6 +489,9 @@ const BrowserController = {
   _currentDataRequestSerial: 0,
   _dataTreeView: null,
   _lastLoadedTreeCell: null,
+  _capturedCell: null,
+  _hoveredCell: null,
+  _loadingCell: null,
 
   load: function() {
     if (DEBUG) log("onload");
@@ -568,44 +596,95 @@ const BrowserController = {
       itemMetadata = itemMetadata.getIndexMetadata(key[3]);
     }
 
-    this._populateMetadataDisplay(itemMetadata.getDisplay(), true);
+    this._populateMetadataDisplay(itemMetadata.getDisplay());
   },
 
-  handleLoadClick: function(event) {
-    if (DEBUG) log("handleLoadClick");
+  handleNavClick: function(event) {
+    if (DEBUG) log("handleNavClick");
 
-    let navTreeView = document.getElementById("tree-nav").view;
+    let tree = document.getElementById("tree-nav");
 
-    let rowIndex = navTreeView.selection.currentIndex;
-    if (rowIndex < 0) {
+    let cell = this._cellFromMouseEvent(event, tree);
+    if (cell) {
+      let properties = cell.getAttribute("properties");
+      if (properties.indexOf("button") != -1 &&
+          (properties.indexOf("objectStore") != -1 ||
+           properties.indexOf("index") != -1)) {
+        this._beginLoad(cell, properties);
+      }
+    }
+  },
+
+  handleNavKeypress: function(event) {
+    if (event.keyCode == KeyEvent.DOM_VK_RETURN) {
+      let tree = document.getElementById("tree-nav");
+      let view = tree.view;
+
+      let rowIndex = view.selection.currentIndex;
+      if (rowIndex >= 0) {
+        let item = view.getItemAtIndex(rowIndex);
+
+        let [ key, isIDBKey ] = this._getKeyFromElement(item);
+        if (key && key.length > 2) {
+          let cell = item.firstChild.firstChild.nextElementSibling;
+          if (cell) {
+            this._beginLoad(cell);
+          }
+        }
+      }
+    }
+  },
+
+  handleNavMousedown: function(event) {
+    let tree = document.getElementById("tree-nav");
+
+    let cell = this._cellFromMouseEvent(event, tree);
+    if (cell) {
+      addProperty(cell, "cell-active");
+      this._capturedCell = cell;
+      tree.setCapture();
+    }
+  },
+
+  handleNavMouseup: function(event) {
+    if (this._capturedCell) {
+      removeProperty(this._capturedCell, "cell-active");
+      this._capturedCell = null;
+    }
+
+    this.handleNavMousemove(event);
+  },
+
+  handleNavMousemove: function(event) {
+    if (this._capturedCell) {
       return;
     }
 
-    let element = navTreeView.getItemAtIndex(rowIndex);
-
-    let [ key, isIDBKey ] = this._getKeyFromElement(element);
-    if (!key) {
+    let cell = this._cellFromMouseEvent(event);
+    if (this._hoveredCell == cell) {
       return;
     }
 
-    if (key.length < 3) {
-      if (DEBUG) log("Bad key: " + JSON.stringify(key));
+    if (this._hoveredCell) {
+      removeProperty(this._hoveredCell, "cell-hover");
+      this._hoveredCell = null;
+    }
+
+    if (cell) {
+      addProperty(cell, "cell-hover");
+      this._hoveredCell = cell;
+    }
+  },
+
+  handleNavMouseleave: function(event) {
+    if (this._capturedCell) {
       return;
     }
 
-    this._populateDataTree(key, isIDBKey);
-
-    if (this._lastLoadedTreeCell) {
-      let properties = this._lastLoadedTreeCell.getAttribute("properties");
-      properties = properties.replace("displayed", "");
-      this._lastLoadedTreeCell.setAttribute("properties", properties);
+    if (this._hoveredCell) {
+      removeProperty(this._hoveredCell, "cell-hover");
+      this._hoveredCell = null;
     }
-
-    let treecell = element.firstChild.firstChild;
-    let properties = treecell.getAttribute("properties");
-    treecell.setAttribute("properties", properties + " displayed");
-
-    this._lastLoadedTreeCell = treecell;
   },
 
   _getKeyFromElement: function(element) {
@@ -696,15 +775,12 @@ const BrowserController = {
     let listElement = document.getElementById("listbox-metadata");
     listElement.setAttribute("disabled", "true");
 
-    let loadButton = document.getElementById("button-load");
-    loadButton.setAttribute("disabled", "true");
-
     while (listElement.getRowCount()) {
       listElement.removeItemAt(0);
     }
   },
 
-  _populateMetadataDisplay: function(metadata, loadable) {
+  _populateMetadataDisplay: function(metadata) {
     if (DEBUG) log("_populateMetadataDisplay");
 
     let listElement = document.getElementById("listbox-metadata");
@@ -728,11 +804,6 @@ const BrowserController = {
     }
 
     listElement.removeAttribute("disabled");
-
-    if (loadable) {
-      let loadButton = document.getElementById("button-load");
-      loadButton.removeAttribute("disabled");
-    }
   },
 
   _handleDatabaseSelect: function(treeItemElement, key, isIDBKey) {
@@ -741,7 +812,7 @@ const BrowserController = {
     if ((key[0] in this._loadedDatabases) &&
         (key[1] in this._loadedDatabases[key[0]])) {
       let dbData = this._loadedDatabases[key[0]][key[1]];
-      this._populateMetadataDisplay(dbData.getDisplay(), false);
+      this._populateMetadataDisplay(dbData.getDisplay());
       return;
     }
 
@@ -764,7 +835,7 @@ const BrowserController = {
       this._buildDatabaseTree(treeItemElement, dbData, key, isIDBKey);
 
       if (this._currentMetadataRequestSerial == requestSerial) {
-        this._populateMetadataDisplay(dbData.getDisplay(), false);
+        this._populateMetadataDisplay(dbData.getDisplay());
       }
     }.bind(this);
     request.onerror = function(event) {
@@ -777,8 +848,7 @@ const BrowserController = {
 
     // First update style on treecell.
     let treecell = treeItemElement.firstChild.firstChild;
-    let properties = treecell.getAttribute("properties");
-    treecell.setAttribute("properties", properties.replace("unloaded", ""));
+    removeProperty(treecell, "unloaded");
 
     if (!dbData.objectStores.length) {
       return;
@@ -809,6 +879,10 @@ const BrowserController = {
       cell.setAttribute("properties", "objectStore");
       row.appendChild(cell);
 
+      cell = document.createElement("treecell");
+      cell.setAttribute("properties", "button objectStore");
+      row.appendChild(cell);
+
       if (hasIndexes) {
         let objectStoreChildren = document.createElement("treechildren");
         item.appendChild(objectStoreChildren);
@@ -829,6 +903,10 @@ const BrowserController = {
           let cell = document.createElement("treecell");
           cell.setAttribute("label", idxData.name);
           cell.setAttribute("properties", "index");
+          row.appendChild(cell);
+
+          cell = document.createElement("treecell");
+          cell.setAttribute("properties", "button index");
           row.appendChild(cell);
         }
       }
@@ -888,6 +966,9 @@ const BrowserController = {
       }
 
       let transaction = db.transaction(objectStoreName, "readonly");
+      transaction.oncomplete = event => {
+        this._endLoad(false);
+      }
 
       let source = transaction.objectStore(objectStoreName);
       if (isIndex) {
@@ -936,8 +1017,9 @@ const BrowserController = {
       }.bind(this);
     }.bind(this);
     request.onerror = function(event) {
+      this._endLoad(true);
       throw new Error(event.target.error.name);
-    };
+    }.bind(this);
   },
 
   _buildCustomFileTree: function(file) {
@@ -1446,4 +1528,93 @@ const BrowserController = {
     tree.view.selection.select(rowIndex);
     tree.focus();
   },
+
+  _cellFromMouseEvent: function(event, treeArg) {
+    let tree = treeArg || document.getElementById("tree-nav");
+
+    let row = { }, col = { }, child = { };
+    tree.treeBoxObject.getCellAt(event.clientX, event.clientY, row, col, child);
+
+    if (row.value < 0) {
+      return null;
+    }
+
+    let column = col.value;
+    if (!column) {
+      return null;
+    }
+
+    let item = tree.view.getItemAtIndex(row.value, column);
+
+    let cell = item.firstChild.firstChild;
+    for (let i = 1; cell && i <= column.index; i++) {
+      cell = cell.nextElementSibling;
+    }
+
+    return cell;
+  },
+
+  _beginLoad: function(cell, properties) {
+    if (DEBUG) log("_beginLoad");
+
+    if (!properties) {
+      properties = cell.getAttribute("properties");
+    }
+
+    let nowLoading;
+    if (this._loadingCell && this._loadingCell != cell) {
+      this._endLoad(true);
+      nowLoading = true;
+    } else {
+      nowLoading = properties.indexOf("loading") == -1;
+    }
+
+    if (!nowLoading) {
+      removeProperty(cell, "loading");
+      this._endLoad(true);
+      this._loadingCell = null;
+      return;
+    }
+
+    let item = cell.parentElement.parentElement;
+
+    let [ key, isIDBKey ] = this._getKeyFromElement(item);
+    if (!key) {
+      return;
+    }
+
+    if (key.length < 3) {
+      if (DEBUG) log("Bad key: " + JSON.stringify(key));
+      return;
+    }
+
+    addProperty(cell, "loading");
+    this._loadingCell = cell;
+
+    this._populateDataTree(key, isIDBKey);
+
+    if (this._lastLoadedTreeCell) {
+      removeProperty(this._lastLoadedTreeCell, "displayed");
+    }
+
+    let treecell = cell.previousElementSibling;
+    addProperty(treecell, "displayed");
+
+    this._lastLoadedTreeCell = treecell;
+  },
+
+  _endLoad: function(canceled) {
+    if (DEBUG) log("_endLoad");
+
+    this._currentDataRequestSerial++;
+
+    if (this._loadingCell) {
+      removeProperty(this._loadingCell, "loading");
+      this._loadingCell = null;
+    }
+
+    if (canceled) {
+      this._dataTreeView.cancel();
+    }
+  }
 };
