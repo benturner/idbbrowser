@@ -1092,7 +1092,8 @@ const BrowserController = {
       return promise;
     }
 
-    let idbPath = OS.Path.join(OS.Constants.Path.profileDir, "indexedDB");
+    let idbPath = OS.Path.join(OS.Constants.Path.profileDir,
+                               "storage/persistent");
     let dbPath = OS.Path.join(idbPath, "chrome", "idb", file.leafName);
 
     Task.spawn(function() {
@@ -1161,7 +1162,8 @@ const BrowserController = {
   _getProfileFiles: function() {
     if (DEBUG) log("getProfileFiles");
 
-    let directory = OS.Path.join(OS.Constants.Path.profileDir, "indexedDB");
+    let directory = OS.Path.join(OS.Constants.Path.profileDir,
+                                 "storage/persistent");
     if (DEBUG) log("Searching profile folder: " + directory);
 
     return Task.spawn(function() {
@@ -1623,7 +1625,8 @@ const BrowserController = {
   },
 
   _sanitizeProfile: function() {
-    let directory = OS.Path.join(OS.Constants.Path.profileDir, "indexedDB");
+    let directory = OS.Path.join(OS.Constants.Path.profileDir,
+                                 "storage/persistent");
     if (DEBUG) log("Sanitizing profile folder: " + directory);
 
     function recursiveSearchDelete(srcDir) {
